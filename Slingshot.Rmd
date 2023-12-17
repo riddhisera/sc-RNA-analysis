@@ -1,0 +1,194 @@
+---
+title: "Slingshot analysis - Functional Genomics Final Project"
+author: "Riddhi Sera"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#1.Package Management and Setup
+```{r packages}
+#library(dplyr)
+#library(slingshot)
+#library(SingleCellExperiment)
+#library(Seurat)
+#library(scater)
+#library(igraph)
+#library(leiden)
+#library(Polychrome)
+#library(ggbeeswarm)
+#library(ggthemes)
+```
+
+#2.Data Preparation
+```{r dataprep}
+#Reading the data
+slingdata <- read.csv("Downloads/data.csv")
+slingdata <- t(as.matrix(slingdata))
+
+#Creating Seurat Object
+slingseu <- CreateSeuratObject(counts = slingdata)
+slingseu
+
+#Data Normalization and Identification of Variable Features
+all.genes <- rownames(slingseu)
+#Normalizing
+slingseu <- NormalizeData(slingseu, normalization.method = "LogNormalize")
+#Finding Variable Features
+slingseu <- FindVariableFeatures(slingseu, selection.method = "vst")
+top10 <- head(VariableFeatures(slingseu), 10)
+#Scaling
+slingseu <- ScaleData(slingseu, features = all.genes)
+
+#Printing top 10 variable genes
+top10
+```
+
+#3.Principal Component Analysis (PCA)
+```{r pca}
+slingseu <- RunPCA(slingseu, features = VariableFeatures(object = slingseu))
+print(slingseu[["pca"]], dims = 1:5, nfeatures = 5)
+```
+
+#4.Visualising PCA Analysis
+```{r pca ana}
+#Visualizes the contribution of each feature/gene for the first two principal 
+#components (PCs) of a PCA reduction
+VizDimLoadings(slingseu, dims = 1:2, reduction = "pca")
+
+#Plots a 2D visualization of the PCA results
+DimPlot(slingseu, reduction = "pca") + NoLegend()
+
+#Generates a heatmap of the gene expression data focusing on the top genes
+DimHeatmap(slingseu, dims = 1, cells = 500, balanced = TRUE)
+
+#Creates an elbow plot to determine the number of PCs to retain in the analysis
+ElbowPlot(slingseu)
+
+#Computes a shared nearest neighbor (SNN) graph and identifies clusters
+slingseu <- FindNeighbors(slingseu, dims = 1:10)
+slingseu <- FindClusters(slingseu, resolution = 0.5)
+
+head(Idents(slingseu), 5)
+```
+
+#5.UMAP
+```{r umap}
+slingseu <- RunUMAP(slingseu, dims = 1:10)
+DimPlot(slingseu, reduction = "umap", label = TRUE)
+```
+
+#6.Marker Gene Analysis
+```{r mga}
+##identifying markers for each cluster
+#cluster1.markers <- FindMarkers(slingseu, ident.1 = 2)
+#head(cluster1.markers, n = 5)
+
+##identifying markers for all clusters together
+#slingseu.markers <- FindAllMarkers(slingseu, only.pos = TRUE)
+```
+
+#7.Gene Expression Visualisation
+```{r gev}
+VlnPlot(slingseu, features = c("GCG", "INS"))
+FeaturePlot(slingseu, features = c("NEUROG3", "CHGA", "APOC1", "TTR"))
+```
+
+#8.Heatmap Visualization
+```{r heatmap}
+#slingseu.markers %>%
+#  group_by(cluster) %>%
+#  dplyr::filter(avg_log2FC > 1) %>%
+#  slice_head(n = 3) %>%
+#  ungroup() -> top3
+#DoHeatmap(slingseu, features = top3$gene) + NoLegend()
+```
+
+#9.Predicting Lineages with Slingshot
+```{r slingshot1}
+##We need to first convert it to a SingleCellExperiment object
+sce <- as.SingleCellExperiment(slingseu)
+reducedDims(sce)$UMAP <- Embeddings(slingseu, "umap")
+colData(sce)$cluster <- Idents(slingseu)
+
+#Perform slingshot analysis
+sce <- slingshot(sce, clusterLabels = 'cluster', reducedDim = 'UMAP')
+
+#Get lineage information
+lnes <- getLineages(reducedDim(sce,"UMAP"), sce$ident)
+print(lnes@metadata$lineages)
+```
+
+Now that we know that cluster 5 is most probably celltype S5, we shall
+choose cluster 5 as the initial cluster. This is in accordance with
+the last cluster number give by the getLineages function.
+
+```{r slingshot2}
+## seeding cluster 5 as the starting cluster
+sce <- slingshot(sce, clusterLabels = 'cluster', reducedDim = "UMAP",
+                 allow.breaks = FALSE, start.clus="5")
+
+lnes <- getLineages(reducedDim(sce,"UMAP"), sce$ident, start.clus = "5")
+print(lnes@metadata$lineages)
+```
+
+#10. Visualizing the pseudotime or lineages
+```{r pseudotime}
+#Defining the cluster colors
+# Assuming 'sce' is a SingleCellExperiment object with UMAP coordinates and cluster IDs
+umap_coords <- reducedDims(sce)$UMAP
+cluster_ids <- sce$ident
+
+# Define the cluster colors
+my_color <- createPalette(length(levels(cluster_ids)), 
+                          c("#010101", "#ff0000"), M=1000)
+names(my_color) <- levels(cluster_ids)
+
+par(mar=c(5.1, 4.1, 4.1, 8.1))  
+plot(umap_coords, col = my_color[as.character(cluster_ids)], pch=16, asp = 1)
+
+centroids <- aggregate(reducedDims(sce)$UMAP, 
+                       by=list(cluster=as.factor(sce$ident)), FUN=mean)
+text(centroids[,2], centroids[,3], labels=names(centroids$cluster), cex=0.8, 
+     pos=3, col="white", bg="black")
+
+lines(SlingshotDataSet(lnes), lwd=2, type='lineages', col="black")
+
+legend("topright", inset=c(-0.3,0), legend = names(my_color), 
+       fill = my_color, cex=0.7, xpd=TRUE, horiz=FALSE, title="Cluster ID")
+
+```
+
+```{r pseudotime3}
+col_data <- colData(sce)
+num_rows <- nrow(col_data)
+num_cols <- length(col_data)
+
+slingshot_df <- data.frame(matrix(nrow = num_rows, ncol = num_cols))
+for (i in seq_along(col_data)) {
+  slingshot_df[[i]] <- col_data[[i]]
+}
+
+colnames(slingshot_df) <- names(col_data)
+slingshot_df$ident = factor(slingshot_df$ident, levels=c(5,7,9,8,2,10,14,13,0))
+names(slingshot_df) <- make.unique(names(slingshot_df))
+ggplot(slingshot_df, aes(x = names(slingshot_df)[14], y = as.factor(ident), 
+                         colour = as.factor(ident))) +
+  geom_quasirandom(groupOnX = TRUE, alpha = 0.7, size = 1.5) + 
+  theme_classic() +
+  theme(
+    legend.position = "right", 
+    axis.text.x = element_text(angle = 45, hjust = 1), 
+    axis.title = element_text(size = 12), 
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 8)
+  ) +
+  scale_color_brewer(palette = "Set3") + 
+  xlab("First Slingshot pseudotime") +
+  ylab("Cell Type") +
+  ggtitle("Cells ordered by Slingshot Pseudotime") +
+  labs(colour = "Identity") 
+```
