@@ -13,9 +13,9 @@
 ## Method of interest:
 Standard single cell RNA analysis and trajectory analysis using PAGA and Slingshot. I chose these methods as they can perform trajectory analysis without the need of spliced/unspliced RNA data like sc-Velo or VeloCyto and also explore how I can incorporate gene expression inferences into lineage identification.
 
-PAGA - PAGA trajectory analysis is a method for mapping cell development paths in single-cell RNA sequencing, highlighting how cells transition between different states or types during differentiation.
+[PAGA](https://github.com/theislab/paga) - PAGA trajectory analysis is a method for mapping cell development paths in single-cell RNA sequencing, highlighting how cells transition between different states or types during differentiation.
 
-Slingshot - Slingshot is a computational tool used for inferring cellular lineages and trajectories in single-cell RNA sequencing data. It identifies differentiation paths in multi-dimensional data, allowing researchers to trace the progression of cell states and types over time.
+[Slingshot](https://bioconductor.org/packages/devel/bioc/vignettes/slingshot/inst/doc/vignette.html) - Slingshot is a computational tool used for inferring cellular lineages and trajectories in single-cell RNA sequencing data. It identifies differentiation paths in multi-dimensional data, allowing researchers to trace the progression of cell states and types over time.
 
 ## Summary of files:
 1. Final_Project_Report_Riddhi_Sera.pdf - The final report (duh.)
